@@ -1,53 +1,19 @@
 packer {
   required_plugins {
-    azure = {
-      source  = "github.com/hashicorp/azure"
-      version = "1.4.5"
+    qemu = {
+      source  = "github.com/hashicorp/qemu"
+      version = "~> 1"
     }
   }
 }
 
-locals {
-  managed_image_name = var.managed_image_name != "" ? var.managed_image_name : "packer-${var.image_os}-${var.image_version}"
-}
-
-variable "allowed_inbound_ip_addresses" {
-  type    = list(string)
-  default = []
-}
-
-variable "azure_tags" {
-  type    = map(string)
-  default = {}
-}
-
-variable "build_resource_group_name" {
-  type    = string
-  default = "${env("BUILD_RESOURCE_GROUP_NAME")}"
-}
-
-variable "client_cert_path" {
-  type    = string
-  default = "${env("ARM_CLIENT_CERT_PATH")}"
-}
-
-variable "client_id" {
-  type    = string
-  default = "${env("ARM_CLIENT_ID")}"
-}
-
-variable "client_secret" {
-  type      = string
-  default   = "${env("ARM_CLIENT_SECRET")}"
-  sensitive = true
-}
-
-variable "dockerhub_login" {
+# install script wants paid docker account to avoid pull rate limit
+variable "dockerhub_login" { # not required
   type    = string
   default = "${env("DOCKERHUB_LOGIN")}"
 }
 
-variable "dockerhub_password" {
+variable "dockerhub_password" { # not required
   type    = string
   default = "${env("DOCKERHUB_PASSWORD")}"
 }
@@ -82,116 +48,31 @@ variable "installer_script_folder" {
   default = "/imagegeneration/installers"
 }
 
-variable "install_password" {
-  type      = string
-  default   = ""
-  sensitive = true
-}
-
-variable "location" {
-  type    = string
-  default = "${env("ARM_RESOURCE_LOCATION")}"
-}
-
-variable "managed_image_name" {
-  type    = string
-  default = ""
-}
-
-variable "managed_image_resource_group_name" {
-  type    = string
-  default = "${env("ARM_RESOURCE_GROUP")}"
-}
-
-variable "private_virtual_network_with_public_ip" {
-  type    = bool
-  default = false
-}
-
-variable "subscription_id" {
-  type    = string
-  default = "${env("ARM_SUBSCRIPTION_ID")}"
-}
-
-variable "temp_resource_group_name" {
-  type    = string
-  default = "${env("TEMP_RESOURCE_GROUP_NAME")}"
-}
-
-variable "tenant_id" {
-  type    = string
-  default = "${env("ARM_TENANT_ID")}"
-}
-
-variable "virtual_network_name" {
-  type    = string
-  default = "${env("VNET_NAME")}"
-}
-
-variable "virtual_network_resource_group_name" {
-  type    = string
-  default = "${env("VNET_RESOURCE_GROUP")}"
-}
-
-variable "virtual_network_subnet_name" {
-  type    = string
-  default = "${env("VNET_SUBNET")}"
-}
-
-variable "vm_size" {
-  type    = string
-  default = "Standard_D4s_v4"
-}
-
-source "azure-arm" "build_image" {
-  allowed_inbound_ip_addresses           = "${var.allowed_inbound_ip_addresses}"
-  build_resource_group_name              = "${var.build_resource_group_name}"
-  client_cert_path                       = "${var.client_cert_path}"
-  client_id                              = "${var.client_id}"
-  client_secret                          = "${var.client_secret}"
-  image_offer                            = "0001-com-ubuntu-server-jammy"
-  image_publisher                        = "canonical"
-  image_sku                              = "22_04-lts"
-  location                               = "${var.location}"
-  managed_image_name                     = "${local.managed_image_name}"
-  managed_image_resource_group_name      = "${var.managed_image_resource_group_name}"
-  os_disk_size_gb                        = "75"
-  os_type                                = "Linux"
-  private_virtual_network_with_public_ip = "${var.private_virtual_network_with_public_ip}"
-  subscription_id                        = "${var.subscription_id}"
-  temp_resource_group_name               = "${var.temp_resource_group_name}"
-  tenant_id                              = "${var.tenant_id}"
-  virtual_network_name                   = "${var.virtual_network_name}"
-  virtual_network_resource_group_name    = "${var.virtual_network_resource_group_name}"
-  virtual_network_subnet_name            = "${var.virtual_network_subnet_name}"
-  vm_size                                = "${var.vm_size}"
-
-  dynamic "azure_tag" {
-    for_each = var.azure_tags
-    content {
-      name = azure_tag.key
-      value = azure_tag.value
-    }
-  }
-}
-
 variable "vm_template_name" {
   type    = string
   default = "ubuntu-22.04"
 }
 
-variable "ubuntu_iso_file" {
+variable "ubuntu_iso_url" {
   type    = string
-  default = "ubuntu-22.04.1-live-server-amd64.iso"
+  default = "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+}
+
+variable "ubuntu_iso_checksum" {
+  type    = string
+  default = "file:https://cloud-images.ubuntu.com/jammy/current/SHA256SUMS"
+}
+
+variable "disk_image" { # 'true' tells packer it's not an iso, but a cloudimg bootable image
+  type    = bool
+  default = true
 }
 
 source "qemu" "custom_image" {
 
   http_directory = "cloud-init"
-  #iso_url        = "https://releases.ubuntu.com/22.04.1/${var.ubuntu_iso_file}"
-  #iso_checksum   = "file:https://releases.ubuntu.com/22.04.1/SHA256SUMS"
-  iso_url      = "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
-  iso_checksum = "file:https://cloud-images.ubuntu.com/jammy/current/SHA256SUMS"
+  iso_url      = var.ubuntu_iso_url
+  iso_checksum = var.ubuntu_iso_checksum
   disk_image   = true
 
 
@@ -205,15 +86,15 @@ source "qemu" "custom_image" {
   ssh_username = "ubuntu"
   ssh_timeout  = "10m" # can be slow on CI
 
-  headless         = true  # false # to see the process, In CI systems set to true
-  accelerator      = "kvm" # set to none if no kvm installed
+  headless         = true  # true # to see the process, In CI systems set to true
+  accelerator      = "hvf" # "kvm" # set to none if no kvm installed
   format           = "qcow2"
   memory           = 4096
   disk_size        = "86G"
   cpus             = 16
   disk_compression = true
   disk_interface   = "virtio"
-  # net_device       = "virtio-net"
+  net_device       = "virtio-net"
 
   vm_name = "${var.vm_template_name}"
 }
@@ -387,7 +268,7 @@ build {
   provisioner "shell" {
     environment_vars = ["HELPER_SCRIPTS=${var.helper_script_folder}", "INSTALLER_SCRIPT_FOLDER=${var.installer_script_folder}", "DOCKERHUB_LOGIN=${var.dockerhub_login}", "DOCKERHUB_PASSWORD=${var.dockerhub_password}"]
     execute_command  = "sudo sh -c '{{ .Vars }} {{ .Path }}'"
-    scripts          = ["${path.root}/../scripts/build/install-docker-compose.sh", "${path.root}/../scripts/build/install-docker.sh"]
+    scripts          = ["${path.root}/../scripts/build/install-docker.sh"]
   }
 
   provisioner "shell" {
