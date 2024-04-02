@@ -7,8 +7,8 @@
 source ~/utils/utils.sh
 
 is_clt_installed() {
-    clt_path=`xcode-select -p 2>&1`
-    [[ -d "$clt_path" ]]
+    clt_path=$(xcode-select -p 2>&1)
+    [[ -d $clt_path ]]
 }
 
 install_clt() {
@@ -43,7 +43,7 @@ while ! is_clt_installed; do
         echo "Unable to find the Command Line Tools, all the attempts exhausted"
         exit 1
     fi
-    echo "Command Line Tools not found, trying to install them via softwareupdates, $retries attempts left"
+    echo "Command Line Tools not found, trying to install them via software updates, $retries attempts left"
     install_clt
     ((retries--))
     echo "Wait $sleepInterval seconds before the next check for installed Command Line Tools"

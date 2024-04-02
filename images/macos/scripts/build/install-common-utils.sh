@@ -18,7 +18,13 @@ fi
 common_packages=$(get_toolset_value '.brew.common_packages[]')
 for package in $common_packages; do
     echo "Installing $package..."
-    brew_smart_install "$package"
+    if is_Monterey && [[ $package == "xcbeautify" ]]; then
+        # Pin the version on Monterey as 2.0.x requires Xcode >=15.0 which is not available on OS12
+        xcbeautify_path=$(download_with_retry "https://raw.githubusercontent.com/Homebrew/homebrew-core/d3653e83f9c029a3fddb828ac804b07ac32f7b3b/Formula/x/xcbeautify.rb")
+        brew install "$xcbeautify_path"
+    else
+        brew_smart_install "$package"
+    fi
 done
 
 cask_packages=$(get_toolset_value '.brew.cask_packages[]')
@@ -28,9 +34,9 @@ for package in $cask_packages; do
         # Do not update VirtualBox on macOS 12 due to the issue with VMs in gurumediation state which blocks Vagrant on macOS: https://github.com/actions/runner-images/issues/8730
         # macOS host: Dropped all kernel extensions. VirtualBox relies fully on the hypervisor and vmnet frameworks provided by Apple now.
         virtualbox_cask_path=$(download_with_retry "https://raw.githubusercontent.com/Homebrew/homebrew-cask/aa3c55951fc9d687acce43e5c0338f42c1ddff7b/Casks/virtualbox.rb")
-        brew install "$virtualbox_cask_path"
+        brew install $virtualbox_cask_path
     else
-        brew install --cask "$package"
+        brew install --cask $package
     fi
 done
 
@@ -51,7 +57,7 @@ if is_Monterey; then
                 osascript $HOME/utils/confirm-identified-developers.scpt $USER_PASSWORD
             } && break
 
-            if [[ "$retry" -eq 0 ]]; then
+            if [[ $retry -eq 0 ]]; then
                 echo "Executing AppleScript failed. No retries left"
                 exit 1
             fi
@@ -75,25 +81,24 @@ if is_Monterey; then
     dbQuery="SELECT * FROM kext_policy WHERE bundle_id LIKE 'com.parallels.kext.%';"
     kext=$(sudo sqlite3 $dbName "$dbQuery")
 
-    if [[ -z "$kext" ]]; then
+    if [[ -z $kext ]]; then
         echo "Parallels International GmbH not found"
         exit 1
     fi
 
     # Create env variable
     url=$(brew info --json=v2 --installed | jq -r '.casks[] | select(.name[] == "Parallels Desktop").url')
-    if [[ -z "$url" ]]; then
+    if [[ -z $url ]]; then
         echo "Unable to parse url for Parallels Desktop cask"
         exit 1
     fi
-    echo "export PARALLELS_DMG_URL=$url" >> "${HOME}/.bashrc"
+    echo "export PARALLELS_DMG_URL=$url" >> ${HOME}/.bashrc
 fi
 
-# Invoke bazel to download bazel version via bazelisk
-bazel
-
-# Install Azure DevOps extension for Azure Command Line Interface
-az extension add -n azure-devops
+if ! is_BigSur; then
+    # Install Azure DevOps extension for Azure Command Line Interface
+    az extension add -n azure-devops
+fi
 
 # Invoke tests for all basic tools
 invoke_tests "BasicTools"

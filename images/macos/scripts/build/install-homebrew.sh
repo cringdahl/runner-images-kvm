@@ -10,7 +10,7 @@ arch=$(get_arch)
 
 echo "Installing Homebrew..."
 homebrew_installer_path=$(download_with_retry "https://raw.githubusercontent.com/Homebrew/install/master/install.sh")
-/bin/bash "$homebrew_installer_path"
+/bin/bash $homebrew_installer_path
 
 if [[ $arch == "arm64" ]]; then
   /opt/homebrew/bin/brew update
@@ -35,6 +35,9 @@ brew_smart_install jq
 
 echo "Installing curl..."
 brew_smart_install curl
+
+echo "Configuring curl to resolve names with IPv4..."
+echo '--ipv4' >> ~/.curlrc
 
 echo "Installing wget..."
 brew_smart_install "wget"
